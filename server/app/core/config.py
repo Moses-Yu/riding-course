@@ -6,8 +6,13 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     app_name: str = "riding-course"
     api_prefix: str = "/api"
-    database_url: str = "mysql+asyncmy://root:password@127.0.0.1:3306/riding_course"
-    cors_origins: list[str] = ["*"]
+    # Default to passwordless local root for dev (Homebrew MySQL). Override via .env when needed.
+    database_url: str = "mysql+asyncmy://root@127.0.0.1:3306/riding_course"
+    cors_origins: list[str] = [
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+        "http://localhost:3000",
+    ]
 
     class Config:
         env_file = ".env"

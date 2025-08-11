@@ -64,3 +64,14 @@ class RoutePoint(Base):
 
     route: Mapped[Route] = relationship(back_populates="points")
 
+
+class RouteOpenEvent(Base):
+    __tablename__ = "route_open_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    route_id: Mapped[int] = mapped_column(ForeignKey("routes.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    user_agent: Mapped[str | None] = mapped_column(String(255))
+    referrer: Mapped[str | None] = mapped_column(String(255))
+    platform: Mapped[str | None] = mapped_column(String(50))
+

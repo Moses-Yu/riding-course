@@ -21,7 +21,7 @@ uvicorn app.main:app --reload --port 8080
 APIs
 - POST /api/routes/parse {raw:string body or form} → RouteNormalized
 - POST /api/routes {...RouteCreate} → RouteOut
-- GET /api/routes?region1=...&tag=...&sort=popular → RouteOut[]
+- GET /api/routes?region1=...&tag=...&sort=popular|comments|latest|opens → RouteOut[]
 - GET /api/routes/:id → RouteOut
-- POST /api/routes/:id/open-track → {ok}
+- POST /api/routes/:id/open-track {userAgent?,referrer?,platform?} → {ok}
 

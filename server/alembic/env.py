@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from logging.config import fileConfig
+import sys
+from pathlib import Path
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 import os
@@ -13,6 +15,11 @@ config = context.config
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# ensure project root (server/) is on sys.path so `app` is importable
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 # gather metadata from models
 from app.db import models  # noqa

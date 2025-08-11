@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Riding Course",
+    "slug": "riding-course",
+    "scheme": "ridingcourse",
+    "plugins": [
+      "expo-router"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.ridingcourse.app",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["nmap"]
+      }
+    },
+    "android": {
+      "package": "com.ridingcourse.app"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
+

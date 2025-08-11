@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlparse, unquote
 from pydantic import BaseModel
 
 
@@ -10,9 +10,18 @@ class ParseError(Exception):
 
 def parse_naver_route(raw: str) -> dict:
     trim = raw.strip()
+    import re
+    # Extract first URL-like token to be robust against prefixes like '@' or surrounding text
+    m_url = re.search(r"(nmap://[^\s]+|intent://[^\s]+|https?://[^\s]+)", trim, re.IGNORECASE)
+    if m_url:
+        trim = m_url.group(1)
+    else:
+        # handle bare host tokens like naver.me/xxxx or map.naver.com/...
+        m_host = re.search(r"\b((?:naver\.me|map\.naver\.com)/[^\s]+)", trim, re.IGNORECASE)
+        if m_host:
+            trim = "https://" + m_host.group(1)
 
     # 1) nmap://route/{modality}?{qs}
-    import re
     m = re.match(r"^nmap://route/([a-z]+)\?(.+)$", trim, re.IGNORECASE)
     if m:
         return _parse_query(m.group(1), m.group(2), 'nmap', raw)
@@ -22,16 +31,51 @@ def parse_naver_route(raw: str) -> dict:
     if m:
         return _parse_query(m.group(1), m.group(2), 'intent', raw)
 
-    # 3) map.naver.com v5 best effort
-    if re.match(r"^https?://map\.naver\.com/v5/directions/", trim, re.IGNORECASE):
+    # 3) map.naver.com web best effort with coordinate extraction (v5 and p variants)
+    if re.match(r"^https?://map\.naver\.com/(v5|p)/directions/", trim, re.IGNORECASE):
+        return _parse_web_directions(trim, raw)
+
+    # 4) naver.me shortlink: try to resolve to full directions URL, fallback to best-effort
+    if re.match(r"^https?://naver\.me/", trim, re.IGNORECASE):
+        try:
+            import httpx
+            with httpx.Client(follow_redirects=True, timeout=3.0) as client:
+                resp = client.get(trim)
+                expanded = str(resp.url)
+                # re-run minimal checks against expanded
+                if re.match(r"^https?://map\.naver\.com/(v5|p)/directions/", expanded, re.IGNORECASE):
+                    parsed = _parse_web_directions(expanded, raw)
+                    parsed['openUrl'] = raw  # preserve short link
+                    parsed['meta']['raw'] = raw
+                    parsed['meta']['expandedUrl'] = expanded
+                    return parsed
+        except Exception:
+            pass
+        # fallback
         return {
             'modality': 'car',
             'waypoints': [],
             'dest': None,
             'openUrl': trim,
-            'meta': {'source': 'web', 'raw': raw},
+            'meta': {'source': 'web-short', 'raw': raw},
             'nmapUrl': None,
         }
+
+    # 5) Any other Naver web URL: accept best-effort to avoid 400s for variants
+    try:
+        parsed = urlparse(trim)
+        host = (parsed.netloc or '').lower()
+        if host.endswith('naver.com') or host.endswith('naver.me') or 'naver.' in host:
+            return {
+                'modality': 'car',
+                'waypoints': [],
+                'dest': None,
+                'openUrl': trim,
+                'meta': {'source': 'web', 'raw': raw},
+                'nmapUrl': None,
+            }
+    except Exception:
+        pass
 
     raise ParseError('네이버 지도 공유 링크를 인식하지 못했어요.')
 
@@ -90,4 +134,65 @@ def _parse_query(modality: str, qs: str, source: str, raw: str) -> dict:
 def _percent_encode(value: str) -> str:
     from urllib.parse import quote
     return quote(str(value), safe='')
+
+
+def _mercator_to_wgs84(x_m: float, y_m: float) -> tuple[float, float]:
+    R = 6378137.0
+    lon = (x_m / R) * 180.0 / 3.141592653589793
+    lat = (2.0 * atan_exp(y_m / R)) * 180.0 / 3.141592653589793
+    return lon, lat
+
+
+def atan_exp(value: float) -> float:
+    import math
+    return math.atan(math.exp(value)) - (math.pi / 4.0)
+
+
+def _parse_web_directions(url: str, raw: str) -> dict:
+    import re
+    pr = urlparse(url)
+    path = pr.path or ''
+    m = re.search(r"/directions/(.+)", path)
+    places: list[dict] = []
+    modality = 'car'
+    if m:
+        segments_and_mode = m.group(1)
+        # remove trailing mode like 'car' or 'car?c=...'
+        parts = segments_and_mode.split('/')
+        if parts:
+            last = parts[-1]
+            if last.startswith('car') or last.startswith('walk') or last.startswith('bike'):
+                modality = 'car' if last.startswith('car') else ('walk' if last.startswith('walk') else 'bike')
+                parts = parts[:-1]
+        for seg in parts:
+            # each seg: x,y,name,id,TYPE
+            try:
+                fields = seg.split(',')
+                if len(fields) >= 3:
+                    x = float(fields[0])
+                    y = float(fields[1])
+                    name = unquote(fields[2])
+                    lon, lat = _mercator_to_wgs84(x, y)
+                    places.append({'lat': lat, 'lng': lon, 'name': name})
+            except Exception:
+                continue
+
+    start = None
+    dest = None
+    waypoints: list[dict] = []
+    if len(places) >= 2:
+        start = places[0]
+        dest = places[-1]
+        if len(places) > 2:
+            waypoints = places[1:-1]
+
+    return {
+        'modality': modality,
+        'start': start,
+        'waypoints': waypoints,
+        'dest': dest,
+        'openUrl': url,
+        'meta': {'source': 'web', 'raw': raw},
+        'nmapUrl': None,
+    }
 
