@@ -55,6 +55,7 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [category, setCategory] = useState<MotoCategoryKey | null>(null);
   const [brand, setBrand] = useState<string>('');
@@ -72,14 +73,19 @@ export default function Register() {
   }, [category, brand]);
 
   const submit = async () => {
+    setErrorMessage(null);
     if (!email.trim() || !password.trim()) {
-      Alert.alert('필수 입력', '이메일과 비밀번호를 입력하세요.');
+      const msg = '이메일과 비밀번호를 입력하세요.';
+      setErrorMessage(msg);
+      Alert.alert('필수 입력', msg);
       return;
     }
     // very light email format hint to users
     const simpleEmailPattern = /.+@.+\..+/;
     if (!simpleEmailPattern.test(email.trim())) {
-      Alert.alert('형식 오류', '올바른 이메일 형식을 입력하세요.');
+      const msg = '올바른 이메일 형식을 입력하세요.';
+      setErrorMessage(msg);
+      Alert.alert('형식 오류', msg);
       return;
     }
     try {
@@ -125,6 +131,7 @@ export default function Register() {
         if (!serverMessage || typeof serverMessage !== 'string') {
           serverMessage = `회원가입 실패 (코드 ${r.status})`;
         }
+        setErrorMessage(serverMessage);
         throw new Error(serverMessage);
       }
       // auto login
@@ -139,6 +146,7 @@ export default function Register() {
       router.replace('/my');
     } catch (e: any) {
       const message = e?.message ? String(e.message) : '회원가입에 실패했습니다';
+      setErrorMessage(message);
       Alert.alert('오류', message);
     }
   };
@@ -169,6 +177,7 @@ export default function Register() {
           onChangeText={setDisplayName}
           style={styles.input}
         />
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
       </View>
 
       <View style={{ gap: 8 }}>
