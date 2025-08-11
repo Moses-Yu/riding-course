@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from urllib.parse import parse_qsl, urlparse, unquote
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ParseError(Exception):
@@ -9,6 +12,7 @@ class ParseError(Exception):
 
 
 def parse_naver_route(raw: str) -> dict:
+    logger.debug("parse_naver_route: raw=%r", raw[:500])
     trim = raw.strip()
     import re
     # Extract first URL-like token to be robust against prefixes like '@' or surrounding text
@@ -39,9 +43,11 @@ def parse_naver_route(raw: str) -> dict:
     if re.match(r"^https?://naver\.me/", trim, re.IGNORECASE):
         try:
             import httpx
+            logger.debug("Resolving shortlink: %s", trim)
             with httpx.Client(follow_redirects=True, timeout=3.0) as client:
                 resp = client.get(trim)
                 expanded = str(resp.url)
+                logger.debug("Shortlink expanded to: %s", expanded)
                 # re-run minimal checks against expanded
                 if re.match(r"^https?://map\.naver\.com/(v5|p)/directions/", expanded, re.IGNORECASE):
                     parsed = _parse_web_directions(expanded, raw)
@@ -50,8 +56,10 @@ def parse_naver_route(raw: str) -> dict:
                     parsed['meta']['expandedUrl'] = expanded
                     return parsed
         except Exception:
+            logger.exception("Shortlink resolve failed: %s", trim)
             pass
         # fallback
+        logger.info("Shortlink fallback for: %s", trim)
         return {
             'modality': 'car',
             'waypoints': [],
@@ -77,6 +85,7 @@ def parse_naver_route(raw: str) -> dict:
     except Exception:
         pass
 
+    logger.warning("Unrecognized Naver link: %r", raw)
     raise ParseError('네이버 지도 공유 링크를 인식하지 못했어요.')
 
 
@@ -95,6 +104,7 @@ def _parse_query(modality: str, qs: str, source: str, raw: str) -> dict:
     dest_lat = params.get('dlat')
     dest_lng = params.get('dlng')
     if not dest_lat or not dest_lng:
+        logger.warning("Missing destination coordinates in query: %s", qs)
         raise ParseError('도착지 좌표가 없어요.')
 
     # rebuild canonical nmap url
@@ -128,6 +138,8 @@ def _parse_query(modality: str, qs: str, source: str, raw: str) -> dict:
     }
     if params.get('slat') and params.get('slng'):
         result['start'] = {'lat': float(params['slat']), 'lng': float(params['slng']), 'name': params.get('sname') or None}
+    logger.debug("_parse_query: source=%s modality=%s dest=(%s,%s) waypoints=%d",
+                 source, modality, dest_lat, dest_lng, len(waypoints))
     return result
 
 
@@ -137,26 +149,24 @@ def _percent_encode(value: str) -> str:
 
 
 def _mercator_to_wgs84(x_m: float, y_m: float) -> tuple[float, float]:
-    R = 6378137.0
-    lon = (x_m / R) * 180.0 / 3.141592653589793
-    lat = (2.0 * atan_exp(y_m / R)) * 180.0 / 3.141592653589793
-    return lon, lat
-
-
-def atan_exp(value: float) -> float:
     import math
-    return math.atan(math.exp(value)) - (math.pi / 4.0)
+    R = 6378137.0
+    lon = (x_m / R) * (180.0 / math.pi)
+    lat = (2.0 * math.atan(math.exp(y_m / R)) - (math.pi / 2.0)) * (180.0 / math.pi)
+    return lon, lat
 
 
 def _parse_web_directions(url: str, raw: str) -> dict:
     import re
     pr = urlparse(url)
     path = pr.path or ''
-    m = re.search(r"/directions/(.+)", path)
+    m = re.search(r"/(v5|p)/directions/(.+)", path)
     places: list[dict] = []
     modality = 'car'
+    variant = None
     if m:
-        segments_and_mode = m.group(1)
+        variant = m.group(1)
+        segments_and_mode = m.group(2)
         # remove trailing mode like 'car' or 'car?c=...'
         parts = segments_and_mode.split('/')
         if parts:
@@ -182,11 +192,17 @@ def _parse_web_directions(url: str, raw: str) -> dict:
     waypoints: list[dict] = []
     if len(places) >= 2:
         start = places[0]
-        dest = places[-1]
-        if len(places) > 2:
-            waypoints = places[1:-1]
+        if variant == 'p' and len(places) >= 3:
+            # For /p/directions, observed order: start, dest, waypoint1, waypoint2, ...
+            dest = places[1]
+            waypoints = places[2:]
+        else:
+            # Default (/v5/directions): start, waypoint..., dest
+            dest = places[-1]
+            if len(places) > 2:
+                waypoints = places[1:-1]
 
-    return {
+    result = {
         'modality': modality,
         'start': start,
         'waypoints': waypoints,
@@ -195,4 +211,7 @@ def _parse_web_directions(url: str, raw: str) -> dict:
         'meta': {'source': 'web', 'raw': raw},
         'nmapUrl': None,
     }
+    logger.debug("_parse_web_directions: modality=%s places=%d start=%s dest=%s",
+                 modality, len(places), bool(start), bool(dest))
+    return result
 

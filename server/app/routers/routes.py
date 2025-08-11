@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Body, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, Body, Form, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
-from app.schemas import RouteNormalized, RouteCreate, RouteOut
+from app.schemas import RouteNormalized, RouteCreate, RouteOut, RouteUpdate
 from app.services.parser import parse_naver_route, ParseError
-from app.db.models import Route, RoutePoint, RouteOpenEvent
+from app.db.models import Route, RoutePoint, RouteOpenEvent, Like, RoutePhoto
 from pydantic import BaseModel
+from app.core.auth import get_current_user, get_optional_user
+from app.db.models import User
 
 router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -77,7 +79,7 @@ async def parse_route(request: Request, body: ParseBody | None = Body(None), raw
 
 @router.post("", response_model=RouteOut)
 @router.post("/", response_model=RouteOut)
-async def create_route(payload: RouteCreate, db: AsyncSession = Depends(get_db)):
+async def create_route(payload: RouteCreate, db: AsyncSession = Depends(get_db), user: User | None = Depends(get_optional_user)):
     new_route = Route(
         title=payload.title,
         summary=payload.summary,
@@ -95,6 +97,7 @@ async def create_route(payload: RouteCreate, db: AsyncSession = Depends(get_db))
         tags_bitmask=payload.tags_bitmask,
         open_url=payload.open_url,
         nmap_url=payload.nmap_url,
+        author_id=(user.id if user else None),
     )
     db.add(new_route)
     await db.flush()
@@ -102,6 +105,77 @@ async def create_route(payload: RouteCreate, db: AsyncSession = Depends(get_db))
     if payload.points:
         for index, p in enumerate(payload.points):
             db.add(RoutePoint(route_id=new_route.id, seq=index, lat=p.lat, lng=p.lng, name=p.name, type=None))
+
+    await db.commit()
+    await db.refresh(new_route)
+    return new_route
+
+
+@router.post("/with-photos", response_model=RouteOut)
+async def create_route_with_photos(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    title: str = Form(...),
+    summary: str | None = Form(None),
+    open_url: str = Form(...),
+    nmap_url: str | None = Form(None),
+    stars_scenery: int | None = Form(None),
+    stars_difficulty: int | None = Form(None),
+    tags_bitmask: int | None = Form(None),
+    points: str | None = Form(None),  # JSON string of Waypoint[]
+    photos: list[UploadFile] = File(default_factory=list),
+    user: User | None = Depends(get_optional_user),
+):
+    # Create route from form fields
+    new_route = Route(
+        title=title,
+        summary=summary,
+        open_url=open_url,
+        nmap_url=nmap_url,
+        stars_scenery=stars_scenery,
+        stars_difficulty=stars_difficulty,
+        tags_bitmask=tags_bitmask,
+        author_id=(user.id if user else None),
+    )
+    db.add(new_route)
+    await db.flush()
+
+    # Parse points JSON if provided
+    if points:
+        try:
+            import json
+            arr = json.loads(points)
+            if isinstance(arr, list):
+                for index, p in enumerate(arr):
+                    lat = float(p.get('lat'))
+                    lng = float(p.get('lng'))
+                    name = p.get('name')
+                    db.add(RoutePoint(route_id=new_route.id, seq=index, lat=lat, lng=lng, name=name, type=None))
+        except Exception:
+            pass
+
+    # Store uploaded files to a local uploads/ directory and record URLs
+    import os
+    from pathlib import Path
+    upload_dir = Path(os.getenv('UPLOAD_DIR', 'uploads'))
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    saved_any = False
+    for f in photos or []:
+        try:
+            # generate safe filename
+            from datetime import datetime
+            base = f"route_{new_route.id}_{int(datetime.utcnow().timestamp()*1000)}_{f.filename or 'photo'}"
+            # very simple sanitization
+            base = base.replace('/', '_').replace('\\', '_')
+            dest = upload_dir / base
+            content = await f.read()
+            with dest.open('wb') as out:
+                out.write(content)
+            url = f"/uploads/{dest.name}"
+            db.add(RoutePhoto(route_id=new_route.id, url=url, author_id=(user.id if user else None)))
+            saved_any = True
+        except Exception:
+            continue
 
     await db.commit()
     await db.refresh(new_route)
@@ -141,12 +215,32 @@ async def list_routes(region1: str | None = None, tag: int | None = None, sort: 
     return list(result.scalars().all())
 
 
+@router.get("/mine", response_model=list[RouteOut])
+async def list_my_routes(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    stmt = select(Route).where(Route.author_id == user.id).order_by(Route.created_at.desc())
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 @router.get("/{route_id}", response_model=RouteOut)
 async def get_route(route_id: int, db: AsyncSession = Depends(get_db)):
     obj = await db.get(Route, route_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Route not found")
     return obj
+
+
+@router.get("/{route_id}/photos")
+async def list_route_photos(route_id: int, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(select(RoutePhoto).where(RoutePhoto.route_id == route_id))
+    return [
+        {
+            "id": p.id,
+            "url": p.url,
+            "created_at": p.created_at.isoformat() if hasattr(p, 'created_at') and p.created_at else None,
+        }
+        for p in res.scalars().all()
+    ]
 
 
 class OpenTrackBody(BaseModel):
@@ -167,10 +261,16 @@ async def track_open(route_id: int, body: OpenTrackBody | None = None, db: Async
 
 
 @router.post("/{route_id}/like", response_model=RouteOut)
-async def like_route(route_id: int, db: AsyncSession = Depends(get_db)):
+async def like_route(route_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     obj = await db.get(Route, route_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Route not found")
+    # Check if like already exists
+    existing = await db.execute(select(Like).where(Like.route_id == route_id, Like.user_id == user.id).limit(1))
+    if existing.scalar_one_or_none():
+        return obj
+    # Create like and increment counter
+    db.add(Like(route_id=route_id, user_id=user.id))
     obj.like_count = (obj.like_count or 0) + 1
     await db.commit()
     await db.refresh(obj)
@@ -178,11 +278,51 @@ async def like_route(route_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{route_id}/unlike", response_model=RouteOut)
-async def unlike_route(route_id: int, db: AsyncSession = Depends(get_db)):
+async def unlike_route(route_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     obj = await db.get(Route, route_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Route not found")
-    obj.like_count = max(0, (obj.like_count or 0) - 1)
+    existing = await db.execute(select(Like).where(Like.route_id == route_id, Like.user_id == user.id).limit(1))
+    like = existing.scalar_one_or_none()
+    if like:
+        await db.delete(like)
+        obj.like_count = max(0, (obj.like_count or 0) - 1)
+        await db.commit()
+        await db.refresh(obj)
+    return obj
+
+
+@router.get("/{route_id}/liked")
+async def check_liked(route_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    existing = await db.execute(select(Like).where(Like.route_id == route_id, Like.user_id == user.id).limit(1))
+    return {"liked": existing.scalar_one_or_none() is not None}
+
+
+@router.patch("/{route_id}", response_model=RouteOut)
+async def update_route(route_id: int, payload: RouteUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    obj = await db.get(Route, route_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Route not found")
+    if obj.author_id != user.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    # Update simple fields if provided
+    for field in [
+        'title','summary','region1','region2','length_km','duration_min','stars_scenery','stars_difficulty',
+        'surface','traffic','speedbump','enforcement','signal','tags_bitmask','open_url','nmap_url']:
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(obj, field, value)
+
+    # Replace points if provided
+    if payload.points is not None:
+        # remove existing points
+        for p in list(obj.points or []):
+            await db.delete(p)
+        await db.flush()
+        for index, p in enumerate(payload.points or []):
+            db.add(RoutePoint(route_id=obj.id, seq=index, lat=p.lat, lng=p.lng, name=p.name, type=None))
+
     await db.commit()
     await db.refresh(obj)
     return obj

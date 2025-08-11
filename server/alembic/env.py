@@ -28,7 +28,8 @@ target_metadata = models.Base.metadata
 
 
 def get_url() -> str:
-    return os.getenv("DATABASE_URL", "mysql+asyncmy://root:password@127.0.0.1:3306/riding_course")
+    # Default to passwordless root for local Homebrew MySQL. Override via .env DATABASE_URL when needed.
+    return os.getenv("DATABASE_URL", "mysql+asyncmy://root@127.0.0.1:3306/riding_course")
 
 
 def run_migrations_offline() -> None:

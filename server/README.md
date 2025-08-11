@@ -24,4 +24,16 @@ APIs
 - GET /api/routes?region1=...&tag=...&sort=popular|comments|latest|opens → RouteOut[]
 - GET /api/routes/:id → RouteOut
 - POST /api/routes/:id/open-track {userAgent?,referrer?,platform?} → {ok}
+ - POST /api/routes/:id/like, /unlike (auth required)
+
+Auth (minimal cookie token)
+- POST /api/auth/register {email,password,display_name?} → User
+- POST /api/auth/login {email,password} → sets httpOnly cookie
+- POST /api/auth/logout → clears cookie
+- GET /api/auth/me → User (auth required)
+
+Protected endpoints
+- POST /api/comments/route/:id → create comment (auth)
+- POST/DELETE /api/bookmarks/route/:id → add/remove bookmark (auth)
+- GET /api/bookmarks/ → my bookmarked routes (auth)
 

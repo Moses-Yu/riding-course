@@ -1,0 +1,27 @@
+site_name: Riding Course Docs
+site_description: Documentation for the Riding Course project
+docs_dir: docs
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - toc.integrate
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - def_list
+  - attr_list
+nav:
+  - Home: index.md
+  - Development: development.md
+  - Architecture: architecture.md
+  - Backend: backend.md
+  - API: api.md
+  - Client: client.md
+  - Deployment: deployment.md
+  - Security: security.md
+
+
