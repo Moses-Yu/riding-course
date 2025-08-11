@@ -1,8 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-
-const TAGS = ['와인딩','힐링','경치','야경','카페투어','초보추천','장거리','단거리','한적함','노면양호','바닷길','산길'];
+import { TAGS as ALL_TAGS, SURFACE_OPTIONS, TRAFFIC_OPTIONS } from './constants';
 
 export default function RouteEdit() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -17,6 +16,12 @@ export default function RouteEdit() {
   const [starsScenery, setStarsScenery] = useState(0);
   const [starsDifficulty, setStarsDifficulty] = useState(0);
   const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
+  const [surface, setSurface] = useState<'unknown' | 'good' | 'rough'>('unknown');
+  const [traffic, setTraffic] = useState<'unknown' | 'low' | 'medium' | 'high'>('unknown');
+  const [speedbump, setSpeedbump] = useState<number>(0);
+  const [enforcement, setEnforcement] = useState<number>(0);
+  const [signal, setSignal] = useState<number>(0);
+  const TAGS = ALL_TAGS;
 
   useEffect(() => {
     const run = async () => {
@@ -36,6 +41,11 @@ export default function RouteEdit() {
         const set = new Set<number>();
         for (let i=0;i<TAGS.length;i++) if (mask & (1<<i)) set.add(i);
         setSelectedTags(set);
+        setSurface((routeJson.surface || 'unknown') as any);
+        setTraffic((routeJson.traffic || 'unknown') as any);
+        setSpeedbump(routeJson.speedbump || 0);
+        setEnforcement(routeJson.enforcement || 0);
+        setSignal(routeJson.signal || 0);
       } finally {
         setLoading(false);
       }
@@ -55,6 +65,11 @@ export default function RouteEdit() {
       summary,
       stars_scenery: starsScenery || null,
       stars_difficulty: starsDifficulty || null,
+      surface,
+      traffic,
+      speedbump,
+      enforcement,
+      signal,
       tags_bitmask: Array.from(selectedTags).reduce((acc, idx)=> acc | (1<<idx), 0) || null,
     };
     const res = await fetch(`${api}/routes/${id}`, {
@@ -86,6 +101,21 @@ export default function RouteEdit() {
         <Text style={styles.sectionTitle}>평가</Text>
         <View style={styles.row}><Text style={{ width: 90 }}>경치</Text><StarBar value={starsScenery} onChange={setStarsScenery} /></View>
         <View style={styles.row}><Text style={{ width: 90 }}>난이도</Text><StarBar value={starsDifficulty} onChange={setStarsDifficulty} /></View>
+        <View style={styles.row}><Text style={{ width: 90 }}>노면</Text>
+          <Segmented options={SURFACE_OPTIONS} value={surface} onChange={setSurface} />
+        </View>
+        <View style={styles.row}><Text style={{ width: 90 }}>교통량</Text>
+          <Segmented options={TRAFFIC_OPTIONS} value={traffic} onChange={setTraffic} />
+        </View>
+        <View style={styles.row}><Text style={{ width: 90 }}>범퍼</Text>
+          <Counter value={speedbump} onChange={setSpeedbump} />
+        </View>
+        <View style={styles.row}><Text style={{ width: 90 }}>단속</Text>
+          <Counter value={enforcement} onChange={setEnforcement} />
+        </View>
+        <View style={styles.row}><Text style={{ width: 90 }}>신호</Text>
+          <Counter value={signal} onChange={setSignal} />
+        </View>
       </View>
       <View style={{ gap: 8 }}>
         <Text style={styles.sectionTitle}>태그</Text>
@@ -139,5 +169,34 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: '#111827', padding: 12, borderRadius: 8 },
   saveBtnText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
 });
+
+function Segmented<T extends string>({ options, value, onChange }: { options: { label: string; value: T }[]; value: T; onChange: (v: T)=>void }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 6 }}>
+      {options.map(opt => {
+        const active = opt.value === value;
+        return (
+          <TouchableOpacity key={opt.value} onPress={()=>onChange(opt.value)} style={[{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: '#e5e7eb' }, active && { backgroundColor: '#111827', borderColor: '#111827' }]}>
+            <Text style={[{ fontSize: 12 }, active ? { color: '#fff' } : { color: '#111827' }]}>{opt.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function Counter({ value, onChange }: { value: number; onChange: (v: number)=>void }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+      <TouchableOpacity onPress={()=>onChange(Math.max(0, value - 1))} style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+        <Text>-</Text>
+      </TouchableOpacity>
+      <Text style={{ minWidth: 24, textAlign: 'center' }}>{value}</Text>
+      <TouchableOpacity onPress={()=>onChange(value + 1)} style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+        <Text>+</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 

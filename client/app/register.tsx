@@ -76,13 +76,57 @@ export default function Register() {
       Alert.alert('필수 입력', '이메일과 비밀번호를 입력하세요.');
       return;
     }
+    // very light email format hint to users
+    const simpleEmailPattern = /.+@.+\..+/;
+    if (!simpleEmailPattern.test(email.trim())) {
+      Alert.alert('형식 오류', '올바른 이메일 형식을 입력하세요.');
+      return;
+    }
     try {
       const r = await fetch(`${api}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password, display_name: displayName.trim() || undefined }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) {
+        const contentType = r.headers.get('content-type') || '';
+        let serverMessage = '';
+        if (contentType.includes('application/json')) {
+          try {
+            const data = await r.json();
+            if (typeof data?.detail === 'string') {
+              serverMessage = data.detail;
+            } else if (Array.isArray(data?.detail)) {
+              // FastAPI validation error format
+              const msgs = data.detail
+                .map((e: any) => {
+                  const field = Array.isArray(e?.loc) ? e.loc.slice(1).join('.') : '';
+                  const msg = e?.msg || '';
+                  return field ? `${field}: ${msg}` : msg;
+                })
+                .filter(Boolean);
+              serverMessage = msgs.join('\n');
+            }
+          } catch (_) {
+            // ignore json parse error
+          }
+        } else {
+          try {
+            serverMessage = await r.text();
+          } catch (_) {
+            // ignore
+          }
+        }
+
+        // localize some known messages/statuses
+        if (r.status === 409 || serverMessage === 'Email already registered') {
+          serverMessage = '이미 등록된 이메일입니다.';
+        }
+        if (!serverMessage || typeof serverMessage !== 'string') {
+          serverMessage = `회원가입 실패 (코드 ${r.status})`;
+        }
+        throw new Error(serverMessage);
+      }
       // auto login
       const l = await fetch(`${api}/auth/login`, {
         method: 'POST',
@@ -94,7 +138,8 @@ export default function Register() {
       Alert.alert('완료', '회원가입이 완료되었습니다.');
       router.replace('/my');
     } catch (e: any) {
-      Alert.alert('오류', e?.message ? String(e.message) : '회원가입에 실패했습니다');
+      const message = e?.message ? String(e.message) : '회원가입에 실패했습니다';
+      Alert.alert('오류', message);
     }
   };
 

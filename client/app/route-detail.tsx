@@ -1,8 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Platform, Linking, StyleSheet, TextInput, ScrollView, Alert, RefreshControl, Image, Modal, Dimensions, Pressable } from 'react-native';
-
-const TAGS = ['와인딩','힐링','경치','야경','카페투어','초보추천','장거리','단거리','한적함','노면양호','바닷길','산길'];
+import { TAGS as ALL_TAGS, SURFACE_OPTIONS, TRAFFIC_OPTIONS } from './constants';
 
 export default function RouteDetail() {
   const router = useRouter();
@@ -230,6 +229,7 @@ export default function RouteDetail() {
 
   if (!route) return <View style={{ padding: 16 }}><Text>Loading...</Text></View>;
 
+  const TAGS = ALL_TAGS;
   const tagNames: string[] = [];
   if (typeof route.tags_bitmask === 'number') {
     for (let i=0;i<TAGS.length;i++) if (route.tags_bitmask & (1<<i)) tagNames.push(TAGS[i]);
@@ -267,9 +267,18 @@ export default function RouteDetail() {
           </TouchableOpacity>
         ) : null}
       </View>
-      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-        {route.stars_scenery ? <Text>경치 {'★'.repeat(route.stars_scenery)}</Text> : null}
-        {route.stars_difficulty ? <Text>난이도 {'★'.repeat(route.stars_difficulty)}</Text> : null}
+      <View style={{ gap: 4 }}>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          {route.stars_scenery ? <Text>경치 {'★'.repeat(route.stars_scenery)}</Text> : null}
+          {route.stars_difficulty ? <Text>난이도 {'★'.repeat(route.stars_difficulty)}</Text> : null}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          {route.surface ? <Text>노면 {labelOf(SURFACE_OPTIONS, route.surface)}</Text> : null}
+          {route.traffic ? <Text>교통량 {labelOf(TRAFFIC_OPTIONS, route.traffic)}</Text> : null}
+          {typeof route.speedbump === 'number' && route.speedbump > 0 ? <Text>범퍼 {route.speedbump}</Text> : null}
+          {typeof route.enforcement === 'number' && route.enforcement > 0 ? <Text>단속 {route.enforcement}</Text> : null}
+          {typeof route.signal === 'number' && route.signal > 0 ? <Text>신호 {route.signal}</Text> : null}
+        </View>
       </View>
       {photos.length > 0 && (() => {
         const winW = Dimensions.get('window').width || 360;
@@ -417,6 +426,11 @@ export default function RouteDetail() {
     </Modal>
     </View>
   );
+}
+
+function labelOf<T extends string>(options: { label: string; value: T }[], v: T | null | undefined): string {
+  const found = options.find(o => o.value === v);
+  return found ? found.label : '';
 }
 
 type PhotoCarouselProps = {

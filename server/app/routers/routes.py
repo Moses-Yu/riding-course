@@ -121,6 +121,11 @@ async def create_route_with_photos(
     nmap_url: str | None = Form(None),
     stars_scenery: int | None = Form(None),
     stars_difficulty: int | None = Form(None),
+    surface: str | None = Form(None),
+    traffic: str | None = Form(None),
+    speedbump: int | None = Form(None),
+    enforcement: int | None = Form(None),
+    signal: int | None = Form(None),
     tags_bitmask: int | None = Form(None),
     points: str | None = Form(None),  # JSON string of Waypoint[]
     photos: list[UploadFile] = File(default_factory=list),
@@ -134,6 +139,11 @@ async def create_route_with_photos(
         nmap_url=nmap_url,
         stars_scenery=stars_scenery,
         stars_difficulty=stars_difficulty,
+        surface=surface,
+        traffic=traffic,
+        speedbump=speedbump,
+        enforcement=enforcement,
+        signal=signal,
         tags_bitmask=tags_bitmask,
         author_id=(user.id if user else None),
     )

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Image, Platform } from 'react-native';
+import { TAGS as ALL_TAGS, SURFACE_OPTIONS, TRAFFIC_OPTIONS } from './constants';
 import PasteBox from '../components/PasteBox';
 // @ts-ignore - optional dependency on native; on web will be unused
 import * as ImagePicker from 'expo-image-picker';
@@ -12,12 +13,15 @@ export default function RouteCreate() {
   const [summary, setSummary] = useState('');
   const [starsScenery, setStarsScenery] = useState(0);
   const [starsDifficulty, setStarsDifficulty] = useState(0);
-  const TAGS = [
-    '와인딩','힐링','경치','야경','카페투어','초보추천','장거리','단거리','한적함','노면양호','바닷길','산길'
-  ];
+  const TAGS = ALL_TAGS;
   const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
   const [photos, setPhotos] = useState<{ uri: string; name?: string; type?: string }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [surface, setSurface] = useState<'unknown' | 'good' | 'rough'>('unknown');
+  const [traffic, setTraffic] = useState<'unknown' | 'low' | 'medium' | 'high'>('unknown');
+  const [speedbump, setSpeedbump] = useState<number>(0);
+  const [enforcement, setEnforcement] = useState<number>(0);
+  const [signal, setSignal] = useState<number>(0);
 
   const handleParsed = (raw: string, p?: any) => {
     setParsed(p ?? null);
@@ -38,6 +42,11 @@ export default function RouteCreate() {
     if (parsed.nmapUrl) form.append('nmap_url', parsed.nmapUrl);
     if (starsScenery) form.append('stars_scenery', String(starsScenery));
     if (starsDifficulty) form.append('stars_difficulty', String(starsDifficulty));
+    if (surface) form.append('surface', surface);
+    if (traffic) form.append('traffic', traffic);
+    if (speedbump) form.append('speedbump', String(speedbump));
+    if (enforcement) form.append('enforcement', String(enforcement));
+    if (signal) form.append('signal', String(signal));
     const mask = Array.from(selectedTags).reduce((acc, idx)=> acc | (1 << idx), 0);
     if (mask) form.append('tags_bitmask', String(mask));
     if (parsed.dest) {
@@ -132,6 +141,29 @@ export default function RouteCreate() {
         <Text style={styles.sectionTitle}>평가</Text>
         <View style={styles.row}><Text style={{ width: 90 }}>경치</Text><StarBar value={starsScenery} onChange={setStarsScenery} /></View>
         <View style={styles.row}><Text style={{ width: 90 }}>난이도</Text><StarBar value={starsDifficulty} onChange={setStarsDifficulty} /></View>
+        <View style={styles.row}><Text style={{ width: 90 }}>노면</Text>
+          <Segmented
+            options={SURFACE_OPTIONS}
+            value={surface}
+            onChange={setSurface}
+          />
+        </View>
+        <View style={styles.row}><Text style={{ width: 90 }}>교통량</Text>
+          <Segmented
+            options={TRAFFIC_OPTIONS}
+            value={traffic}
+            onChange={setTraffic}
+          />
+        </View>
+        <View style={styles.row}><Text style={{ width: 90 }}>범퍼</Text>
+          <Counter value={speedbump} onChange={setSpeedbump} />
+        </View>
+        <View style={styles.row}><Text style={{ width: 90 }}>단속</Text>
+          <Counter value={enforcement} onChange={setEnforcement} />
+        </View>
+        <View style={styles.row}><Text style={{ width: 90 }}>신호</Text>
+          <Counter value={signal} onChange={setSignal} />
+        </View>
       </View>
       <View style={{ gap: 8 }}>
         <Text style={styles.sectionTitle}>태그 <Text style={{ color: '#6b7280' }}>({selectedTags.size} 선택됨)</Text></Text>
@@ -212,6 +244,35 @@ function StarBar({ value, onChange }: { value: number; onChange: (v:number)=>voi
       {value>0 && (
         <TouchableOpacity onPress={()=>onChange(0)}><Text style={{ color: '#888', marginLeft: 6 }}>지우기</Text></TouchableOpacity>
       )}
+    </View>
+  );
+}
+
+function Segmented<T extends string>({ options, value, onChange }: { options: { label: string; value: T }[]; value: T; onChange: (v: T)=>void }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 6 }}>
+      {options.map(opt => {
+        const active = opt.value === value;
+        return (
+          <TouchableOpacity key={opt.value} onPress={()=>onChange(opt.value)} style={[{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: '#e5e7eb' }, active && { backgroundColor: '#111827', borderColor: '#111827' }]}>
+            <Text style={[{ fontSize: 12 }, active ? { color: '#fff' } : { color: '#111827' }]}>{opt.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function Counter({ value, onChange }: { value: number; onChange: (v: number)=>void }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+      <TouchableOpacity onPress={()=>onChange(Math.max(0, value - 1))} style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+        <Text>-</Text>
+      </TouchableOpacity>
+      <Text style={{ minWidth: 24, textAlign: 'center' }}>{value}</Text>
+      <TouchableOpacity onPress={()=>onChange(value + 1)} style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+        <Text>+</Text>
+      </TouchableOpacity>
     </View>
   );
 }
