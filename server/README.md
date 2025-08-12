@@ -38,3 +38,12 @@ Protected endpoints
 - GET /api/bookmarks/ → my bookmarked routes (auth)
 
 server deploy actions test
+ 
+Deployment (GitHub Actions → EC2)
+
+- Required repository secrets:
+  - `SSH_HOST`, `SSH_USER`, `SSH_KEY`
+  - Either provide `ENV_FILE` containing the whole `.env`, or provide DB secrets so the workflow composes one:
+    - `DATABASE_URL` (preferred), or all of `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME`
+
+- The workflow uploads `.env` to `/opt/riding-course/server/.env`, installs deps, runs `alembic upgrade head`, then restarts `riding-course` service.
