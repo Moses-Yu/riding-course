@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Literal, List
 from datetime import datetime
 
@@ -87,8 +87,7 @@ class RouteOut(BaseModel):
     # Optional for backward compatibility with older clients
     has_photos: Optional[bool] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CommentCreate(BaseModel):
@@ -103,8 +102,7 @@ class CommentOut(BaseModel):
     like_count: int = 0
     liked_by_me: Optional[bool] = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserOut(BaseModel):
@@ -113,8 +111,7 @@ class UserOut(BaseModel):
     display_name: Optional[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RegisterIn(BaseModel):

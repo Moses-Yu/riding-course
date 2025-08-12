@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -38,12 +38,13 @@ async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login")
-async def login(payload: LoginIn, response: Response, db: AsyncSession = Depends(get_db)):
+async def login(payload: LoginIn, response: Response, request: Request, db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(User).where(User.email == payload.email))
     user = res.scalar_one_or_none()
     if not user or not check_password_hash(user.password_hash, payload.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_token(user.id)
+    # Always set a host-only cookie for local/dev and tests
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
@@ -51,15 +52,38 @@ async def login(payload: LoginIn, response: Response, db: AsyncSession = Depends
         httponly=True,
         secure=COOKIE_SECURE,
         samesite="lax",
-        domain=COOKIE_DOMAIN,
         path="/",
     )
+    # Additionally set a domain cookie when configured (for prod) and host matches the domain
+    host = (request.url.hostname or "").lower()
+    should_set_domain = bool(COOKIE_DOMAIN) and (
+        host == COOKIE_DOMAIN or host.endswith("." + COOKIE_DOMAIN)
+    )
+    if should_set_domain:
+        response.set_cookie(
+            key=AUTH_COOKIE_NAME,
+            value=token,
+            max_age=60 * 60 * 24 * 30,
+            httponly=True,
+            secure=COOKIE_SECURE,
+            samesite="lax",
+            domain=COOKIE_DOMAIN,
+            path="/",
+        )
     return {"ok": True}
 
 
 @router.post("/logout")
-async def logout(response: Response):
-    response.delete_cookie(AUTH_COOKIE_NAME, path="/", domain=COOKIE_DOMAIN)
+async def logout(response: Response, request: Request):
+    # Delete host-only cookie
+    response.delete_cookie(AUTH_COOKIE_NAME, path="/")
+    # And domain cookie if configured and host matches
+    host = (request.url.hostname or "").lower()
+    should_delete_domain = bool(COOKIE_DOMAIN) and (
+        host == COOKIE_DOMAIN or host.endswith("." + COOKIE_DOMAIN)
+    )
+    if should_delete_domain:
+        response.delete_cookie(AUTH_COOKIE_NAME, path="/", domain=COOKIE_DOMAIN)
     return {"ok": True}
 
 

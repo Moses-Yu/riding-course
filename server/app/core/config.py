@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 from typing import Optional
 from urllib.parse import quote_plus, urlparse
 
@@ -8,34 +9,27 @@ from urllib.parse import quote_plus, urlparse
 class Settings(BaseSettings):
     app_name: str = "riding-course"
     api_prefix: str = "/api"
-    
+
+    # Base settings configuration (pydantic-settings v2)
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="",
+    )
+
     # Prefer a full DATABASE_URL when provided; otherwise, build from DB_* pieces.
-    database_url_env: Optional[str] = None  # maps from env var DATABASE_URL
-    db_host: Optional[str] = None
-    db_port: Optional[int] = None
-    db_user: Optional[str] = None
-    db_pass: Optional[str] = None
-    db_name: str = "riding_course"
+    database_url_env: Optional[str] = Field(default=None, validation_alias="DATABASE_URL")
+    db_host: Optional[str] = Field(default=None, validation_alias="DB_HOST")
+    db_port: Optional[int] = Field(default=None, validation_alias="DB_PORT")
+    db_user: Optional[str] = Field(default=None, validation_alias="DB_USER")
+    db_pass: Optional[str] = Field(default=None, validation_alias="DB_PASS")
+    db_name: str = Field(default="riding_course", validation_alias="DB_NAME")
 
     cors_origins: list[str] = [
         "http://localhost:8081",
         "http://127.0.0.1:8081",
         "http://localhost:3000",
     ]
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        # Map DATABASE_URL -> database_url_env
-        env_prefix = ""
-        fields = {
-            "database_url_env": {"env": ["DATABASE_URL"]},
-            "db_host": {"env": ["DB_HOST"]},
-            "db_port": {"env": ["DB_PORT"]},
-            "db_user": {"env": ["DB_USER"]},
-            "db_pass": {"env": ["DB_PASS"]},
-            "db_name": {"env": ["DB_NAME"]},
-        }
 
     @property
     def database_url(self) -> str:
