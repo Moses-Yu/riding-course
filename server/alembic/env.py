@@ -21,15 +21,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# gather metadata from models
+# gather metadata and settings from the app
 from app.db import models  # noqa
+from app.core.config import settings  # load .env and settings
 
 target_metadata = models.Base.metadata
 
 
 def get_url() -> str:
-    # Default to passwordless root for local Homebrew MySQL. Override via .env DATABASE_URL when needed.
-    return os.getenv("DATABASE_URL", "mysql+asyncmy://root@127.0.0.1:3306/riding_course")
+    # Use the same database URL as the application settings (reads from .env / env vars)
+    return settings.database_url
 
 
 def run_migrations_offline() -> None:
@@ -47,7 +48,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section) or {}
-    # Alembic uses sync driver; map async URL to PyMySQL
+    # Alembic uses a sync driver; map async URL to PyMySQL for migrations
     async_url = get_url()
     configuration["sqlalchemy.url"] = async_url.replace("+asyncmy", "+pymysql")
     connectable = engine_from_config(

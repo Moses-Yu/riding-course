@@ -16,7 +16,11 @@ def upgrade() -> None:
         # Index might not exist in some environments; ignore
         pass
     # Add unique constraint on (route_id, user_id)
-    op.create_unique_constraint('uq_bookmarks_route_user', 'bookmarks', ['route_id', 'user_id'])
+    try:
+        op.create_unique_constraint('uq_bookmarks_route_user', 'bookmarks', ['route_id', 'user_id'])
+    except Exception:
+        # Constraint already exists; ignore to keep migration idempotent across environments
+        pass
 
 
 def downgrade() -> None:
