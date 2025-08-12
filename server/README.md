@@ -37,3 +37,4 @@ Protected endpoints
 - POST/DELETE /api/bookmarks/route/:id → add/remove bookmark (auth)
 - GET /api/bookmarks/ → my bookmarked routes (auth)
 
+server deploy actions test
