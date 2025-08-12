@@ -2,27 +2,36 @@
   "name": "riding-course-client",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "yarn@4.5.1",
+  "engines": {
+    "node": ">=20.19.4"
+  },
   "main": "expo-router/entry",
   "scripts": {
     "dev": "expo start -c",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "eas-build-pre-install": "corepack enable && corepack prepare yarn@4.5.1 --activate"
   },
   "dependencies": {
     "expo": "~53.0.20",
-    "expo-image-picker": "~16.0.3",
     "expo-clipboard": "~7.1.5",
+    "expo-constants": "~16.0.2",
+    "expo-image-picker": "~16.0.3",
     "expo-linking": "~7.1.7",
     "expo-router": "~5.1.4",
+    "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
-    "react-native-web": "^0.20.0",
-    "expo-status-bar": "~2.2.3"
+    "react-native-web": "^0.20.0"
+  },
+  "resolutions": {
+    "react-native": "0.79.5"
   },
   "devDependencies": {
     "@types/react": "~19.0.10",

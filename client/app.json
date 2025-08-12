@@ -15,7 +15,8 @@
       "infoPlist": {
         "LSApplicationQueriesSchemes": ["nmap"],
         "NSPhotoLibraryUsageDescription": "We use your photo library to let you upload route photos.",
-        "NSCameraUsageDescription": "We use your camera to let you take photos for routes."
+        "NSCameraUsageDescription": "We use your camera to let you take photos for routes.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -24,7 +25,12 @@
     },
     "web": {
       "bundler": "metro"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2b85a162-1ab9-4d53-afe4-601ce73e5893"
+      }
     }
   }
 }
-
