@@ -2,18 +2,25 @@
   "expo": {
     "name": "Riding Course",
     "slug": "riding-course",
+    "version": "1.0.0",
     "scheme": "ridingcourse",
     "plugins": [
       "expo-router"
     ],
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.ridingcourse.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["nmap"]
+        "LSApplicationQueriesSchemes": ["nmap"],
+        "NSPhotoLibraryUsageDescription": "We use your photo library to let you upload route photos.",
+        "NSCameraUsageDescription": "We use your camera to let you take photos for routes."
       }
     },
     "android": {
-      "package": "com.ridingcourse.app"
+      "package": "com.ridingcourse.app",
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro"
